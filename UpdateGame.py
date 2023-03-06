@@ -1,4 +1,5 @@
 import argparse
+from ast import arg
 import os
 import hashlib
 import time
@@ -115,31 +116,33 @@ def StartUpdate(Patch: list):
     :param Patch: 包含补丁包文件名的列表
     :return:
     """
-    start = time.time()
+    StartTime = time.time()
     # 更新游戏
     for PatchName in Patch:
         Update(PatchName)
     print("\n")
+    EndUpdateTime = time.time()
     # 校验文件
-    PkgVersion = []
-    for file in os.listdir(root):
-        if "pkg" in file:
-            print("已找到资源校验文件 ", file)
-            PkgVersion.append(file)
-    StartCheckMD5(PkgVersion)
+    if IsCheckMd5:
+        PkgVersion = []
+        for file in os.listdir(root):
+            if "pkg" in file:
+                print("已找到资源校验文件 ", file)
+                PkgVersion.append(file)
+        StartCheckMD5(PkgVersion)
     # 移除更新补丁
     for PatchName in Patch:
         os.remove("{}/{}".format(root, PatchName))
     print("\nFinish!")
-    # 修改config文件
-    cfg.set("General", "game_version", NewVersion)
-    if Server == "bilibili":
-        cfg.set("General", "plugin_sdk_version", BilibiliSdkVersion)
-    with open("{}/config.ini".format(root), "w") as f:
-        cfg.write(f)
-    end = time.time()
-    delta = end - start
-    print(f'更新耗时: {delta:.3f} 秒')
+    EndTime = time.time()
+    UpdateDelta = EndUpdateTime - StartTime
+    CheckMD5Delta = EndTime - EndUpdateTime
+    SumDelta = EndTime - StartTime
+    print(f'更新耗时: {UpdateDelta:.1f} 秒')
+    print(f'校验耗时: {CheckMD5Delta:.1f} 秒')
+    print(f'总计耗时: {SumDelta:.1f} 秒')
+
+
 
 
 def GetPatch(PatchContent: dict, IsPre: bool):
@@ -169,7 +172,7 @@ def GetPatch(PatchContent: dict, IsPre: bool):
         temp[item["version"]] = idx
     # 如果当前游戏版本不在生成temp的keys里面,说明版本过低,没有对应的补丁包用于更新
     if NowVersion not in temp.keys():
-        print("当前版本过低,请重新下载游戏！")
+        print("当前版本过低,需要重新下载游戏！")
         exit()
     # 先把游戏本体的补丁包链接加入到list
     DownloadUrl = [Content["diffs"][temp[NowVersion]]["path"]]
@@ -237,9 +240,14 @@ def main():
     cfg = configparser.ConfigParser()
     cfg.read("{}/config.ini".format(root))
     Server = cfg.get("General", "cps")
-    # NowVersion = "2.7.0"
-    # with open("url/2.7.0_bilibili_pre.json", "r", encoding="utf-8") as f:
+
+    # # =========================================================================
+    # NowVersion = "2.8.0"
+    # with open("url/2.8.0_os_pre.json", "r", encoding="utf-8") as f:
     #     Content = json.load(f)
+    # # =========================================================================
+
+    # =========================================================================
     NowVersion = cfg.get("General", "game_version")
     url = ""
     if Server == "pcadbdpz":
@@ -261,6 +269,8 @@ def main():
     Response = request.urlopen(Req)
     Content = Response.read().decode("utf8")
     Content = json.loads(Content)
+    # =========================================================================
+    
     PatchContent = Content["data"]
     # 判断是否有预下载,有预下载直接下载好补丁
     if PatchContent["pre_download_game"] is not None:
@@ -277,16 +287,30 @@ def main():
             print("当前版本为 {} , 官方最新版本为 {}".format(NowVersion, NewVersion))
             # 检查是否下载好补丁,没有补丁会进行下载
             Patch, BilibiliSdkVersion = GetPatch(PatchContent, IsPre=False)
-            print("\n更新补丁已下载完成,开始更新游戏\n")
+            print("\n更新补丁已下载完成,按下回车开始更新游戏\n")
+            # input()
             print("\033[1;31m" + "----------游戏更新过程中请不要中断程序！！！---------" + "\033[0m")
             StartUpdate(Patch)
-
+    # =========================================================================
+            # 修改config文件
+            cfg.set("General", "game_version", NewVersion)
+            if Server == "bilibili":
+                cfg.set("General", "plugin_sdk_version", BilibiliSdkVersion)
+            with open("{}/config.ini".format(root), "w") as f:
+                cfg.write(f)
+    # =========================================================================
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, SignalExit)
     signal.signal(signal.SIGTERM, SignalExit)
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument('--GamePath', '-p', default='G:/Genshin Impact Oversea/Genshin Impact game', type=str)
+    parser.add_argument('--GamePath', '-p', default='D:/Genshin Impact/Genshin Impact Game', type=str)
+    parser.add_argument('--IsCheckMd5', '-i', default=True, type=bool)
     args = parser.parse_args()
     root = args.GamePath
+    IsCheckMd5 = args.IsCheckMd5
+    # =========================================================================
     main()
+    # =========================================================================
+    # Patch = ["game_3.0.0_3.1.0_hdiff_3dlivNRan0Dq7ykP.zip","zh-cn_3.0.0_3.1.0_hdiff_pkNHKFGT9oVOc7IX.zip"]
+    # StartUpdate(Patch=Patch)
