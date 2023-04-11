@@ -83,10 +83,10 @@ def CheckFileMD5(FileDict: dict, idx: int):
             print("\033[1;31m" + "[{}/{}] {} 校验失败！计算值 {},原值 {}".format(idx + 1, CheckFileLen,
                                                                        FileDict['remoteName'], md5,
                                                                        FileDict['md5']) + "\033[0m")
-            print("\033[1;31m" + "资源文件校验失败,更新可能出现异常,可能需要重新下载游戏！" + "\033[0m")
+            print("\033[1;31m" + "资源文件校验失败,更新可能出现异常,可尝试运行游戏修复！" + "\033[0m")
     except Exception:
         print("\033[1;31m" + "[{}/{}] {} 打开文件失败！".format(idx + 1, CheckFileLen, FileDict['remoteName']) + "\033[0m")
-        print("\033[1;31m" + "资源文件校验失败,更新可能出现异常,可能需要重新下载游戏！" + "\033[0m")
+        print("\033[1;31m" + "资源文件校验失败,更新可能出现异常,可尝试运行游戏修复！" + "\033[0m")
 
 
 def StartCheckMD5(pkg_version: list):
@@ -147,7 +147,6 @@ def StartUpdate(Patch: list):
 
 def GetPatch(PatchContent: dict, IsPre: bool):
     """
-    ----------------------对照api返回的json来看代码---------------------
     用于读取api返回的json数据里的补丁包链接,判断本地需要的补丁包,缺少会下载
     最后会返回补丁包的文件名和B服SDK的版本号{没有下载SDK的话返回None)
     :param PatchContent: api返回的json数据{只需要json数据内“data”那部分的内容)
@@ -227,12 +226,6 @@ def SignalExit(signum, frame):
 
 def main():
     global cfg, Server, NowVersion, NewVersion, BilibiliSdkVersion
-    # 获取游戏更新补丁的api
-    PatchUrl = {
-        "cn": "https://sdk-static.mihoyo.com/hk4e_cn/mdk/launcher/api/resource?channel_id=1&key=eYd89JmJ&launcher_id=18&sub_channel_id=1",
-        "bilibili": "https://sdk-static.mihoyo.com/hk4e_cn/mdk/launcher/api/resource?key=KAtdSsoQ&launcher_id=17&channel_id=14",
-        "os": "https://sdk-os-static.mihoyo.com/hk4e_global/mdk/launcher/api/resource?channel_id=1&key=gcStgarh&launcher_id=10&sub_channel_id=0"
-    }
     # 读取游戏根目录下的config.ini来获取游戏版本号以及游戏服务器
     if not os.path.exists("{}/config.ini".format(root)):
         print("无法读取游戏根目录下的config.ini,请检查路径是否正确")
@@ -240,76 +233,96 @@ def main():
     cfg = configparser.ConfigParser()
     cfg.read("{}/config.ini".format(root))
     Server = cfg.get("General", "cps")
-
+    NowVersion = cfg.get("General", "game_version")
     # # =========================================================================
     # NowVersion = "2.8.0"
     # with open("url/2.8.0_os_pre.json", "r", encoding="utf-8") as f:
     #     Content = json.load(f)
     # # =========================================================================
-
-    # =========================================================================
-    NowVersion = cfg.get("General", "game_version")
-    url = ""
     if Server == "pcadbdpz":
         print("当前游戏服务器为国服")
-        url = PatchUrl["cn"]
     elif Server == "bilibili":
         print("当前游戏服务器为B服")
-        url = PatchUrl["bilibili"]
     elif Server == "mihoyo":
         print("当前游戏服务器为国际服")
-        url = PatchUrl["os"]
     else:
         print("无法获取当前游戏服务器类型")
         exit()
-    headers = {
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.54 Safari/537.36"
-    }
-    Req = request.Request(url=url, headers=headers)
-    Response = request.urlopen(Req)
-    Content = Response.read().decode("utf8")
-    Content = json.loads(Content)
-    # =========================================================================
-    
-    PatchContent = Content["data"]
-    # 判断是否有预下载,有预下载直接下载好补丁
-    if PatchContent["pre_download_game"] is not None:
-        PreVersion = PatchContent["pre_download_game"]["latest"]["version"]
-        print("当前版本为{},目前有预更新,预更新版本为{} ".format(NowVersion, PreVersion))
-        GetPatch(PatchContent, IsPre=True)
-        print("\n预更新下载完成！")
+    if SkipVerify is True:
+        dirlist = os.listdir(root)
+        Patch = []
+        print("当前游戏目录存在的游戏补丁有")
+        for i in dirlist:
+            if i.endswith(".zip"):
+                if "game" in i:
+                    Patch.append(i)
+                    NewVersion = i.split("_")[2]
+                    print(i)
+                if "zh-cn" in i or "en-us" in i or "ja-jp" in i or "ko-kr" in i:
+                    Patch.append(i)
+                    print(i)
+        print("\n即将更新到{}版本,按下回车开始更新,按下Ctrl+C退出更新\n".format(NewVersion))
+        input()
+        print("\033[1;31m" + "----------游戏更新过程中请不要中断程序！！！---------" + "\033[0m")
+        StartUpdate(Patch)
     else:
-        # 没有预下载直接检查更新
-        NewVersion = PatchContent["game"]["latest"]["version"]
-        if NowVersion == NewVersion:
-            print("当前版本为最新版本！")
+        # =========================================================================
+        # 获取游戏更新补丁的api
+        PatchUrl = {
+            "pcadbdpz": "https://sdk-static.mihoyo.com/hk4e_cn/mdk/launcher/api/resource?channel_id=1&key=eYd89JmJ&launcher_id=18&sub_channel_id=1",
+            "bilibili": "https://sdk-static.mihoyo.com/hk4e_cn/mdk/launcher/api/resource?key=KAtdSsoQ&launcher_id=17&channel_id=14",
+            "mihoyo": "https://sdk-os-static.mihoyo.com/hk4e_global/mdk/launcher/api/resource?channel_id=1&key=gcStgarh&launcher_id=10&sub_channel_id=0"
+        }
+        headers = {
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.54 Safari/537.36"
+        }
+        Req = request.Request(url=PatchUrl[Server], headers=headers)
+        Response = request.urlopen(Req)
+        Content = Response.read().decode("utf8")
+        Content = json.loads(Content)
+        # =========================================================================
+        PatchContent = Content["data"]
+        # 判断是否有预下载,有预下载直接下载好补丁
+        if PatchContent["pre_download_game"] is not None:
+            PreVersion = PatchContent["pre_download_game"]["latest"]["version"]
+            print("当前版本为{},目前有预更新,预更新版本为{} ".format(NowVersion, PreVersion))
+            GetPatch(PatchContent, IsPre=True)
+            print("\n预更新下载完成！")
+            exit()
         else:
-            print("当前版本为 {} , 官方最新版本为 {}".format(NowVersion, NewVersion))
-            # 检查是否下载好补丁,没有补丁会进行下载
-            Patch, BilibiliSdkVersion = GetPatch(PatchContent, IsPre=False)
-            print("\n更新补丁已下载完成,按下回车开始更新游戏\n")
-            # input()
-            print("\033[1;31m" + "----------游戏更新过程中请不要中断程序！！！---------" + "\033[0m")
-            StartUpdate(Patch)
+            # 没有预下载直接检查更新
+            NewVersion = PatchContent["game"]["latest"]["version"]
+            if NowVersion == NewVersion:
+                print("当前版本为最新版本！")
+            else:
+                print("当前版本为 {} , 官方最新版本为 {}".format(NowVersion, NewVersion))
+                # 检查是否下载好补丁,没有补丁会进行下载
+                Patch, BilibiliSdkVersion = GetPatch(PatchContent, IsPre=False)
+                print("\n更新补丁已下载完成,按下回车开始更新游戏\n")
+                # input()
+                print("\033[1;31m" + "----------游戏更新过程中请不要中断程序！！！---------" + "\033[0m")
+                StartUpdate(Patch)
+        # =========================================================================
     # =========================================================================
-            # 修改config文件
-            cfg.set("General", "game_version", NewVersion)
-            if Server == "bilibili":
-                cfg.set("General", "plugin_sdk_version", BilibiliSdkVersion)
-            with open("{}/config.ini".format(root), "w") as f:
-                cfg.write(f)
+    # 修改config文件
+    cfg.set("General", "game_version", NewVersion)
+    if Server == "bilibili":
+        cfg.set("General", "plugin_sdk_version", BilibiliSdkVersion)
+    with open("{}/config.ini".format(root), "w") as f:
+        cfg.write(f)
     # =========================================================================
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, SignalExit)
     signal.signal(signal.SIGTERM, SignalExit)
     parser = argparse.ArgumentParser(description="")
-    parser.add_argument('--GamePath', '-p', default='D:/Genshin Impact/Genshin Impact Game', type=str)
+    parser.add_argument('--GamePath', '-p', default='D:\Genshin Impact\Genshin Impact Game', type=str)
     parser.add_argument('--IsCheckMd5', '-i', default=True, type=bool)
+    parser.add_argument("--SkipVerify", '-v', default=False, type=bool)
     args = parser.parse_args()
     root = args.GamePath
     IsCheckMd5 = args.IsCheckMd5
-    # =========================================================================
+    SkipVerify = args.SkipVerify
     main()
     # =========================================================================
     # Patch = ["game_3.0.0_3.1.0_hdiff_3dlivNRan0Dq7ykP.zip","zh-cn_3.0.0_3.1.0_hdiff_pkNHKFGT9oVOc7IX.zip"]
